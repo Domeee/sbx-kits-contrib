@@ -1,0 +1,38 @@
+schemaVersion: "2"
+kind: sandbox
+name: pi-dome
+displayName: pi configuration of Don Hubi
+description: Pi with native OpenAI Codex subscription login and Don Hubi's packages
+
+# Reuse upstream's rolling image (pi, fd, rg and Docker), not its kit:
+# composition is additive and cannot remove Anthropic credentials.
+sandbox:
+  image: docker.io/sbx/pi-image:latest
+  entrypoint:
+    - pi
+agentInstructions:
+  filename: AGENTS.md
+
+permissions:
+  network:
+    allow:
+      # Pi package installation
+      - registry.npmjs.org
+
+      # Pi's ChatGPT/Codex subscription authentication
+      - auth.openai.com
+
+      # Pi's openai-codex provider
+      - chatgpt.com
+
+      # pi-web-access OpenAI web search / OpenAI API-key mode
+      - api.openai.com
+
+# Deliberately no credentials block or auth.json overlay. Pi owns its native
+# openai-codex OAuth store, including accountId and rotating refresh tokens.
+# An engine-managed credentialFile would overwrite that store on restart.
+setup:
+  install:
+    - command: 'if [ -n "${HTTP_PROXY:-}" ]; then npm config set proxy="$HTTP_PROXY" https-proxy="${HTTPS_PROXY:-$HTTP_PROXY}"; fi'
+      user: "1000"
+      description: Point runtime npm package installs at the sandbox proxy, as in the upstream pi kit

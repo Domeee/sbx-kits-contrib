@@ -1,0 +1,5 @@
+{
+  "defaultProvider": "openai-codex",
+  "transport": "sse",
+  "packages": ["npm:pi-web-access", "npm:@juicesharp/rpiv-ask-user-question"]
+}
