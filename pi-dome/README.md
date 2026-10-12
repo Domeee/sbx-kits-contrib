@@ -5,6 +5,14 @@ subscription login**, not Anthropic auth. Reuses upstream's rolling
 `docker.io/sbx/pi-image:latest` (Pi, fd, ripgrep and Docker) and npm proxy
 configuration. Keeps `pi-web-access` and `@juicesharp/rpiv-ask-user-question`.
 
+## Planned upgrade
+
+See [the upgrade plan and step-by-step execution guide](UPGRADE.md) for moving to
+Pi's newer **`openai` → Sign in with ChatGPT** flow with host-owned OAuth,
+proxy-managed dynamic secrets, durable settings, version pinning, and validation.
+That plan is not implemented yet; the instructions below describe the current
+native `openai-codex` kit.
+
 ## Usage and migration
 
 From this checkout:
