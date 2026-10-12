@@ -2,37 +2,80 @@ schemaVersion: "2"
 kind: sandbox
 name: pi-dome
 displayName: pi configuration of Don Hubi
-description: Pi with native OpenAI Codex subscription login and Don Hubi's packages
+description: Pi with host-owned ChatGPT OAuth, proxy-managed OpenAI access and pinned packages
 
-# Reuse upstream's rolling image (pi, fd, rg and Docker), not its kit:
-# composition is additive and cannot remove Anthropic credentials.
+# Standalone: additive composition with pi would retain its Anthropic credentials.
+# OCI index: linux/amd64 verified with Pi 1.1.0 and Node 22.22.1.
+# linux/arm64 is present in the index but still needs runtime validation.
 sandbox:
-  image: docker.io/sbx/pi-image:latest
+  image: docker.io/sbx/pi-image@sha256:b278e3e25c3cae780efd9b5b4df047209a91cebafa45426c241356fa53c05cfd
   entrypoint:
     - pi
 agentInstructions:
   filename: AGENTS.md
 
+credentials:
+  - service: openai
+    description: Host Pi ChatGPT access token, injected by the sandbox proxy
+    # Allow creation before a sandbox-scoped resolver is registered.
+    # Verify placeholder delivery and real inference before using the sandbox.
+    apiKey:
+      name: OPENAI_API_KEY
+      proxyManaged: true
+      inject:
+        - domain: api.openai.com
+          scheme: bearer
+
 permissions:
   network:
     allow:
-      # Pi package installation
       - registry.npmjs.org
-
-      # Pi's ChatGPT/Codex subscription authentication
+      - api.openai.com
+      # Retained login-related allowances; not used by the host-owned auth flow.
+      # Narrowing the allowlist is a separate, explicitly tested policy change.
       - auth.openai.com
-
-      # Pi's openai-codex provider
       - chatgpt.com
 
-      # pi-web-access OpenAI web search / OpenAI API-key mode
-      - api.openai.com
+environment:
+  variables:
+    # Also makes pi-web-access resolve the seeded config in this directory.
+    PI_CODING_AGENT_DIR: /home/agent/.pi/agent
+    PI_SKIP_VERSION_CHECK: "1"
+    PI_TELEMETRY: "0"
 
-# Deliberately no credentials block or auth.json overlay. Pi owns its native
-# openai-codex OAuth store, including accountId and rotating refresh tokens.
-# An engine-managed credentialFile would overwrite that store on restart.
 setup:
   install:
-    - command: 'if [ -n "${HTTP_PROXY:-}" ]; then npm config set proxy="$HTTP_PROXY" https-proxy="${HTTPS_PROXY:-$HTTP_PROXY}"; fi'
+    # Install precedes setup.files; prepare the directory before seeding.
+    - command: "mkdir -p /home/agent/.pi/agent && chmod 700 /home/agent/.pi/agent"
       user: "1000"
-      description: Point runtime npm package installs at the sandbox proxy, as in the upstream pi kit
+      description: Prepare the private, durable Pi settings directory
+    - command: 'if [ -n "${HTTPS_PROXY:-${HTTP_PROXY:-}}" ]; then npm config set proxy="${HTTP_PROXY:-$HTTPS_PROXY}" https-proxy="${HTTPS_PROXY:-$HTTP_PROXY}"; fi'
+      user: "1000"
+      description: Point runtime npm package installs at the sandbox proxy
+  files:
+    - path: /home/agent/.pi/agent/settings.json
+      mode: "0600"
+      onlyIfMissing: true
+      description: Seed defaults without replacing user settings or deviceId
+      content: |
+        {
+          "defaultProvider": "openai",
+          "defaultModel": "gpt-6.1-sol",
+          "defaultThinkingLevel": "xhigh",
+          "transport": "sse",
+          "packages": [
+            "npm:pi-web-access@0.39.0",
+            "npm:@juicesharp/rpiv-ask-user-question@2.13.5"
+          ]
+        }
+    - path: /home/agent/.pi/agent/web-search.json
+      mode: "0600"
+      onlyIfMissing: true
+      description: Seed explicit OpenAI Responses search without replacing user configuration
+      content: |
+        {
+          "provider": "openai",
+          "openaiSearchProviders": ["openai"],
+          "openaiSearchModel": "gpt-6.1-sol",
+          "workflow": "none"
+        }
